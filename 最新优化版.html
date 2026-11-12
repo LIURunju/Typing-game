@@ -1,0 +1,1013 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>漢字インベーダー - Kanji Invaders</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=DotGothic16&family=Noto+Sans+JP:wght@400;700&display=swap');
+    body {
+      font-family: 'Noto Sans JP', sans-serif;
+      background-color: #0c0a09;
+      color: #e7e5e4;
+      touch-action: manipulation;
+    }
+    .pixel-font {
+      font-family: 'DotGothic16', monospace;
+    }
+    canvas {
+      image-rendering: pixelated;
+    }
+    .glow-box {
+      box-shadow: 0 0 15px rgba(20, 184, 166, 0.25);
+    }
+    .glow-text {
+      text-shadow: 0 0 8px rgba(45, 212, 191, 0.6);
+    }
+    .glow-red {
+      text-shadow: 0 0 8px rgba(244, 63, 94, 0.6);
+    }
+    @keyframes floatUp {
+      0% { transform: translateY(0) scale(1); opacity: 1; }
+      100% { transform: translateY(-40px) scale(1.2); opacity: 0; }
+    }
+    .floating-anim {
+      animation: floatUp 1.5s ease-out forwards;
+    }
+    @keyframes pulseHeart {
+      0% { transform: scale(1); }
+      50% { transform: scale(1.4); }
+      100% { transform: scale(1); }
+    }
+    .pulse-anim {
+      animation: pulseHeart 0.5s ease-in-out;
+    }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col items-center justify-start p-2 sm:p-4 select-none">
+
+  <!-- TOP HEADER / HUD -->
+  <header class="w-full max-w-md bg-stone-900/90 border border-teal-500/30 rounded-2xl p-3 mb-2 glow-box flex flex-col gap-2">
+    <div class="flex justify-between items-center text-xs sm:text-sm font-bold tracking-wider text-teal-400">
+      <div class="flex items-center gap-1">
+        <span class="text-stone-400 text-[10px]">SCORE</span>
+        <span id="scoreText" class="pixel-font text-base sm:text-xl text-teal-200">00000</span>
+      </div>
+      <div class="flex items-center gap-1">
+        <span class="text-stone-400 text-[10px]">COMBO</span>
+        <span id="comboText" class="pixel-font text-base sm:text-xl text-yellow-400">x1</span>
+      </div>
+      <div class="flex items-center gap-1">
+        <span class="text-stone-400 text-[10px]">DIFF</span>
+        <span id="diffBadgeText" class="px-2 py-0.5 rounded text-[11px] bg-teal-950 text-teal-300 border border-teal-500/40">初級</span>
+      </div>
+    </div>
+    
+    <div class="flex justify-between items-center text-xs border-t border-stone-800 pt-2">
+      <div class="flex items-center gap-1.5">
+        <span class="text-stone-400 text-[10px]">SHIELD</span>
+        <div id="livesContainer" class="flex items-center gap-1.5 text-rose-500 text-sm">
+          <i class="fa-solid fa-shield-heart"></i>
+          <i class="fa-solid fa-shield-heart"></i>
+          <i class="fa-solid fa-shield-heart"></i>
+        </div>
+      </div>
+      <div class="flex items-center gap-2">
+        <span id="activeStatus" class="text-[10px] text-teal-400 bg-teal-950/80 px-2 py-0.5 rounded-full border border-teal-500/30 animate-pulse">警戒中</span>
+        <div class="flex items-center gap-1">
+          <span class="text-stone-400 text-[10px]">WAVE</span>
+          <span id="waveText" class="pixel-font text-sm text-teal-200">01</span>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- GAME CANVAS CONTAINER -->
+  <main class="w-full max-w-md relative bg-stone-950 border-2 border-teal-500/40 rounded-t-2xl border-b-0 overflow-hidden shadow-2xl flex flex-col items-center">
+    <canvas id="gameCanvas" class="w-full block bg-stone-950 cursor-crosshair"></canvas>
+
+    <!-- OVERLAYS / MODALS -->
+    <div id="startScreen" class="absolute inset-0 bg-stone-950/95 backdrop-blur-md flex flex-col items-center justify-center p-6 text-center z-20">
+      <div class="mb-2 text-teal-400 text-3xl font-black pixel-font glow-text">漢字インベーダー</div>
+      <p class="text-xs text-stone-400 mb-6">KANJI INVADERS - JLPT Japanese Word Defense</p>
+      
+      <div class="w-full max-w-xs space-y-3 mb-6">
+        <label class="block text-left text-[11px] text-teal-300 font-bold mb-1">難易度を選択 (Difficulty)</label>
+        <div class="grid grid-cols-3 gap-2">
+          <button onclick="setDifficulty('easy')" id="btnEasy" class="py-2 px-1 text-xs rounded-xl bg-teal-600 text-white font-bold transition hover:bg-teal-500 border border-teal-400 shadow-lg">初級 (Easy)</button>
+          <button onclick="setDifficulty('normal')" id="btnNormal" class="py-2 px-1 text-xs rounded-xl bg-stone-800 text-stone-300 font-bold transition hover:bg-stone-700 border border-stone-700">中級 (Normal)</button>
+          <button onclick="setDifficulty('hard')" id="btnHard" class="py-2 px-1 text-xs rounded-xl bg-stone-800 text-stone-300 font-bold transition hover:bg-stone-700 border border-stone-700">上級 (Hard)</button>
+        </div>
+        <p id="diffDesc" class="text-[11px] text-stone-400 text-left bg-stone-900 p-2.5 rounded-xl border border-stone-800">
+          初級: 常用汉字与基础训读词汇。显示假名提示，敌人速度较慢。
+        </p>
+      </div>
+
+      <button onclick="startGame()" class="w-full max-w-xs py-3 px-6 bg-gradient-to-r from-teal-500 to-emerald-600 text-stone-950 font-black rounded-xl text-base shadow-lg shadow-teal-500/30 hover:brightness-110 active:scale-95 transition">
+        <i class="fa-solid fa-play mr-2"></i> ゲームスタート (START)
+      </button>
+    </div>
+
+    <div id="gameOverScreen" class="absolute inset-0 bg-stone-950/95 backdrop-blur-md flex flex-col items-center justify-center p-6 text-center z-20 hidden">
+      <div class="text-rose-500 text-3xl font-black pixel-font mb-1 glow-red">防衛防線突破</div>
+      <p class="text-xs text-stone-400 mb-6">GAME OVER - 基地已被敌方词汇攻陷</p>
+      
+      <div class="bg-stone-900 border border-stone-800 p-4 rounded-2xl w-full max-w-xs mb-6 space-y-2 text-sm">
+        <div class="flex justify-between text-stone-400"><span>最終スコア (Score):</span> <span id="finalScore" class="pixel-font text-teal-400 font-bold">0</span></div>
+        <div class="flex justify-between text-stone-400"><span>到達ウェーブ (Wave):</span> <span id="finalWave" class="pixel-font text-teal-400 font-bold">1</span></div>
+        <div class="flex justify-between text-stone-400"><span>撃破漢字数 (Defeated):</span> <span id="finalDefeated" class="pixel-font text-teal-400 font-bold">0</span></div>
+      </div>
+
+      <button onclick="restartGame()" class="w-full max-w-xs py-3 px-6 bg-gradient-to-r from-teal-500 to-emerald-600 text-stone-950 font-black rounded-xl text-base shadow-lg shadow-teal-500/30 hover:brightness-110 active:scale-95 transition">
+        <i class="fa-solid fa-rotate-right mr-2"></i> もう一度プレイ (RETRY)
+      </button>
+    </div>
+  </main>
+
+  <!-- CONTROLS & INPUT BAR -->
+  <footer class="w-full max-w-md flex flex-col gap-1.5">
+    <div class="bg-stone-900/95 border-2 border-t-0 border-teal-500/40 rounded-b-2xl p-2 glow-box flex flex-col gap-2">
+      <div class="flex items-center gap-1.5">
+        <div class="relative flex-1">
+          <input type="text" id="kanjiInput" readonly inputmode="none" autocomplete="off"
+            placeholder="ローマ字で入力 (例: akinau)..."
+            class="w-full bg-stone-950 text-teal-200 px-3 py-2 rounded-xl border border-teal-500/40 text-base font-bold focus:outline-none focus:border-teal-400 placeholder-stone-600">
+        </div>
+        <button onclick="submitInput()" class="bg-gradient-to-r from-teal-500 to-emerald-600 text-stone-950 px-3 py-2 rounded-xl font-bold text-xs shadow-md shadow-teal-500/20 active:scale-95 transition flex items-center gap-1">
+          <span>撃破</span> <i class="fa-solid fa-paper-plane text-[10px]"></i>
+        </button>
+        <button onclick="toggleKeyboard()" id="kbToggleBtn" class="bg-stone-800 text-teal-300 p-2 rounded-xl border border-stone-700 active:scale-95 transition" title="システムキーボード切替">
+          <i class="fa-solid fa-keyboard"></i>
+        </button>
+        <button onclick="toggleAudio()" id="audioBtn" class="bg-stone-800 text-teal-400 p-2 rounded-xl border border-stone-700 active:scale-95 transition" title="音声切り替え">
+          <i class="fa-solid fa-volume-high"></i>
+        </button>
+        <button onclick="togglePause()" id="pauseBtn" class="bg-stone-800 text-yellow-400 p-2 rounded-xl border border-stone-700 active:scale-95 transition" title="一時停止">
+          <i class="fa-solid fa-pause"></i>
+        </button>
+        <button onclick="returnToMenu()" class="bg-stone-800 text-rose-400 p-2 rounded-xl border border-stone-700 active:scale-95 transition" title="メニューに戻る">
+          <i class="fa-solid fa-door-open"></i>
+        </button>
+      </div>
+
+      <!-- BUILT-IN QWERTY 26-KEY ROMAJI KEYBOARD -->
+      <div id="kanaKeypad" class="flex flex-col gap-1.5 pt-1 select-none">
+        <div class="grid grid-cols-10 gap-1">
+          <button type="button" onclick="tapRomaji('q')" class="py-2.5 bg-stone-800 hover:bg-stone-700 active:bg-teal-600 text-teal-100 rounded-lg font-bold text-sm border border-stone-700 shadow">Q</button>
+          <button type="button" onclick="tapRomaji('w')" class="py-2.5 bg-stone-800 hover:bg-stone-700 active:bg-teal-600 text-teal-100 rounded-lg font-bold text-sm border border-stone-700 shadow">W</button>
+          <button type="button" onclick="tapRomaji('e')" class="py-2.5 bg-stone-800 hover:bg-stone-700 active:bg-teal-600 text-teal-100 rounded-lg font-bold text-sm border border-stone-700 shadow">E</button>
+          <button type="button" onclick="tapRomaji('r')" class="py-2.5 bg-stone-800 hover:bg-stone-700 active:bg-teal-600 text-teal-100 rounded-lg font-bold text-sm border border-stone-700 shadow">R</button>
+          <button type="button" onclick="tapRomaji('t')" class="py-2.5 bg-stone-800 hover:bg-stone-700 active:bg-teal-600 text-teal-100 rounded-lg font-bold text-sm border border-stone-700 shadow">T</button>
+          <button type="button" onclick="tapRomaji('y')" class="py-2.5 bg-stone-800 hover:bg-stone-700 active:bg-teal-600 text-teal-100 rounded-lg font-bold text-sm border border-stone-700 shadow">Y</button>
+          <button type="button" onclick="tapRomaji('u')" class="py-2.5 bg-stone-800 hover:bg-stone-700 active:bg-teal-600 text-teal-100 rounded-lg font-bold text-sm border border-stone-700 shadow">U</button>
+          <button type="button" onclick="tapRomaji('i')" class="py-2.5 bg-stone-800 hover:bg-stone-700 active:bg-teal-600 text-teal-100 rounded-lg font-bold text-sm border border-stone-700 shadow">I</button>
+          <button type="button" onclick="tapRomaji('o')" class="py-2.5 bg-stone-800 hover:bg-stone-700 active:bg-teal-600 text-teal-100 rounded-lg font-bold text-sm border border-stone-700 shadow">O</button>
+          <button type="button" onclick="tapRomaji('p')" class="py-2.5 bg-stone-800 hover:bg-stone-700 active:bg-teal-600 text-teal-100 rounded-lg font-bold text-sm border border-stone-700 shadow">P</button>
+        </div>
+        <div class="grid grid-cols-9 gap-1 px-3">
+          <button type="button" onclick="tapRomaji('a')" class="py-2.5 bg-stone-800 hover:bg-stone-700 active:bg-teal-600 text-teal-100 rounded-lg font-bold text-sm border border-stone-700 shadow">A</button>
+          <button type="button" onclick="tapRomaji('s')" class="py-2.5 bg-stone-800 hover:bg-stone-700 active:bg-teal-600 text-teal-100 rounded-lg font-bold text-sm border border-stone-700 shadow">S</button>
+          <button type="button" onclick="tapRomaji('d')" class="py-2.5 bg-stone-800 hover:bg-stone-700 active:bg-teal-600 text-teal-100 rounded-lg font-bold text-sm border border-stone-700 shadow">D</button>
+          <button type="button" onclick="tapRomaji('f')" class="py-2.5 bg-stone-800 hover:bg-stone-700 active:bg-teal-600 text-teal-100 rounded-lg font-bold text-sm border border-stone-700 shadow">F</button>
+          <button type="button" onclick="tapRomaji('g')" class="py-2.5 bg-stone-800 hover:bg-stone-700 active:bg-teal-600 text-teal-100 rounded-lg font-bold text-sm border border-stone-700 shadow">G</button>
+          <button type="button" onclick="tapRomaji('h')" class="py-2.5 bg-stone-800 hover:bg-stone-700 active:bg-teal-600 text-teal-100 rounded-lg font-bold text-sm border border-stone-700 shadow">H</button>
+          <button type="button" onclick="tapRomaji('j')" class="py-2.5 bg-stone-800 hover:bg-stone-700 active:bg-teal-600 text-teal-100 rounded-lg font-bold text-sm border border-stone-700 shadow">J</button>
+          <button type="button" onclick="tapRomaji('k')" class="py-2.5 bg-stone-800 hover:bg-stone-700 active:bg-teal-600 text-teal-100 rounded-lg font-bold text-sm border border-stone-700 shadow">K</button>
+          <button type="button" onclick="tapRomaji('l')" class="py-2.5 bg-stone-800 hover:bg-stone-700 active:bg-teal-600 text-teal-100 rounded-lg font-bold text-sm border border-stone-700 shadow">L</button>
+        </div>
+        <div class="grid grid-cols-9 gap-1">
+          <button type="button" onclick="clearKana()" class="py-2.5 bg-stone-800 hover:bg-stone-700 active:bg-amber-600 text-amber-400 rounded-lg font-bold text-xs border border-stone-700 shadow">CLR</button>
+          <button type="button" onclick="tapRomaji('z')" class="py-2.5 bg-stone-800 hover:bg-stone-700 active:bg-teal-600 text-teal-100 rounded-lg font-bold text-sm border border-stone-700 shadow">Z</button>
+          <button type="button" onclick="tapRomaji('x')" class="py-2.5 bg-stone-800 hover:bg-stone-700 active:bg-teal-600 text-teal-100 rounded-lg font-bold text-sm border border-stone-700 shadow">X</button>
+          <button type="button" onclick="tapRomaji('c')" class="py-2.5 bg-stone-800 hover:bg-stone-700 active:bg-teal-600 text-teal-100 rounded-lg font-bold text-sm border border-stone-700 shadow">C</button>
+          <button type="button" onclick="tapRomaji('v')" class="py-2.5 bg-stone-800 hover:bg-stone-700 active:bg-teal-600 text-teal-100 rounded-lg font-bold text-sm border border-stone-700 shadow">V</button>
+          <button type="button" onclick="tapRomaji('b')" class="py-2.5 bg-stone-800 hover:bg-stone-700 active:bg-teal-600 text-teal-100 rounded-lg font-bold text-sm border border-stone-700 shadow">B</button>
+          <button type="button" onclick="tapRomaji('n')" class="py-2.5 bg-stone-800 hover:bg-stone-700 active:bg-teal-600 text-teal-100 rounded-lg font-bold text-sm border border-stone-700 shadow">N</button>
+          <button type="button" onclick="tapRomaji('m')" class="py-2.5 bg-stone-800 hover:bg-stone-700 active:bg-teal-600 text-teal-100 rounded-lg font-bold text-sm border border-stone-700 shadow">M</button>
+          <button type="button" onclick="backspaceKana()" class="py-2.5 bg-stone-800 hover:bg-stone-700 active:bg-rose-600 text-rose-400 rounded-lg font-bold text-sm border border-stone-700 shadow flex items-center justify-center"><i class="fa-solid fa-delete-left"></i></button>
+        </div>
+      </div>
+    </div>
+
+    <div class="text-[11px] text-stone-400 px-1 flex items-center justify-between">
+      <div>ロックオン可能: <span id="lockOnList" class="text-teal-300 font-medium">なし</span></div>
+      <div class="text-[10px] text-stone-500">自動ロックオン対応</div>
+    </div>
+  </footer>
+
+  <!-- FLOATING NOTIFICATION BADGE -->
+  <div id="itemNotification" class="fixed top-20 left-1/2 -translate-x-1/2 z-50 pointer-events-none opacity-0 transition-all duration-300 transform -translate-y-4">
+    <div id="itemNotifyContent" class="bg-teal-950 border-2 border-teal-400 text-teal-200 px-4 py-2 rounded-2xl shadow-2xl font-bold text-xs sm:text-sm flex items-center gap-2 glow-box">
+      <i class="fa-solid fa-wand-magic-sparkles text-yellow-400 text-lg"></i>
+      <span id="itemNotifyText">アイテム獲得！</span>
+    </div>
+  </div>
+
+  <script>
+    const vocabData = {
+      easy: [
+        { word: "水", readings: ["みず", "すい"], hint: "みず・すい" },
+        { word: "木", readings: ["き", "もく"], hint: "き・もく" },
+        { word: "金", readings: ["かね", "きん"], hint: "かね・きん" },
+        { word: "土", readings: ["つち", "ど"], hint: "つち・ど" },
+        { word: "日", readings: ["ひ", "にち"], hint: "ひ・にち" },
+        { word: "月", readings: ["つき", "げつ"], hint: "つき・げつ" },
+        { word: "火", readings: ["ひ", "か"], hint: "ひ・か" },
+        { word: "山", readings: ["やま", "さん"], hint: "やま・さん" },
+        { word: "川", readings: ["かわ", "せん"], hint: "かわ・せん" },
+        { word: "空", readings: ["そら", "くう"], hint: "そら・くう" },
+        { word: "雨", readings: ["あめ", "う"], hint: "あめ・う" },
+        { word: "車", readings: ["くるま", "しゃ"], hint: "くるま・しゃ" },
+        { word: "花", readings: ["はな", "か"], hint: "はな・か" },
+        { word: "犬", readings: ["いぬ", "けん"], hint: "いぬ・けん" },
+        { word: "手", readings: ["て", "しゅ"], hint: "て・しゅ" }
+      ],
+      normal: [
+        { word: "試練", readings: ["しれん"], hint: "しれん" },
+        { word: "窮地", readings: ["きゅうち"], hint: "きゅうち" },
+        { word: "曲者", readings: ["くせもの"], hint: "くせもの" },
+        { word: "手際", readings: ["てぎわ"], hint: "てぎわ" },
+        { word: "見当", readings: ["けんとう"], hint: "けんとう" },
+        { word: "言い訳", readings: ["いいわけ"], hint: "いいわけ" },
+        { word: "足音", readings: ["あしおと"], hint: "あしおと" },
+        { word: "手伝い", readings: ["てつだい"], hint: "てつだい" },
+        { word: "気配", readings: ["けはい"], hint: "けはい" },
+        { word: "手品", readings: ["てじな"], hint: "てじな" }
+      ],
+      hard: [
+        { word: "如雨露", readings: ["じょうろ"], hint: "じょうろ" },
+        { word: "喧しい", readings: ["やかましい"], hint: "やかましい" },
+        { word: "滞る", readings: ["とどこおる"], hint: "とどこおる" },
+        { word: "傾ける", readings: ["かたむける"], hint: "かたむける" },
+        { word: "言付け", readings: ["ことづけ"], hint: "ことづけ" },
+        { word: "手探り", readings: ["てさぐり"], hint: "てさぐり" }
+      ]
+    };
+
+    // Special Kun-yomi verb enemies (Distinct color, guaranteed item drop)
+    const kunyomiVerbPool = [
+      { word: "示す", readings: ["しめす"], hint: "しめす" },
+      { word: "商う", readings: ["あきなう"], hint: "あきなう" },
+      { word: "恵む", readings: ["めぐむ"], hint: "めぐむ" },
+      { word: "率いる", readings: ["ひきいる"], hint: "ひきいる" },
+      { word: "潤う", readings: ["うるおう"], hint: "うるおう" },
+      { word: "志す", readings: ["こころざす"], hint: "こころざす" },
+      { word: "脅かす", readings: ["おびやかす", "おどかす"], hint: "おびやかす" },
+      { word: "戯れる", readings: ["たわむれる"], hint: "たわむれる" },
+      { word: "騒ぐ", readings: ["さわぐ"], hint: "さわぐ" },
+      { word: "試す", readings: ["ためす"], hint: "ためす" }
+    ];
+
+    // Boss Pool (Strictly separated from special soldier words)
+    const bossPool = [
+      { word: "試練", readings: ["しれん"], hint: "しれん", hp: 3 },
+      { word: "窮地", readings: ["きゅうち"], hint: "きゅうち", hp: 3 },
+      { word: "曲者", readings: ["くせもの"], hint: "くせもの", hp: 3 },
+      { word: "手際", readings: ["てぎわ"], hint: "てぎわ", hp: 3 },
+      { word: "見当", readings: ["けんとう"], hint: "けんとう", hp: 3 },
+      { word: "一期一会", readings: ["いちごいちえ"], hint: "いちごいちえ", hp: 3 },
+      { word: "百花繚乱", readings: ["ひゃっかりょうらん"], hint: "ひゃっかりょうらん", hp: 3 }
+    ];
+
+    let audioCtx = null;
+    let soundEnabled = true;
+
+    function initAudio() {
+      if (!audioCtx) {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      }
+      if (audioCtx && audioCtx.state === 'suspended') {
+        audioCtx.resume();
+      }
+    }
+
+    const sound = {
+      playShoot() {
+        if (!soundEnabled || !audioCtx) return;
+        try {
+          const osc = audioCtx.createOscillator();
+          const gain = audioCtx.createGain();
+          osc.type = 'triangle';
+          osc.frequency.setValueAtTime(440, audioCtx.currentTime);
+          osc.frequency.exponentialRampToValueAtTime(880, audioCtx.currentTime + 0.1);
+          gain.gain.setValueAtTime(0.15, audioCtx.currentTime);
+          gain.gain.linearRampToValueAtTime(0.01, audioCtx.currentTime + 0.1);
+          osc.connect(gain); gain.connect(audioCtx.destination);
+          osc.start(); osc.stop(audioCtx.currentTime + 0.1);
+        } catch(e) {}
+      },
+      playHit() {
+        if (!soundEnabled || !audioCtx) return;
+        try {
+          const osc = audioCtx.createOscillator();
+          const gain = audioCtx.createGain();
+          osc.type = 'square';
+          osc.frequency.setValueAtTime(220, audioCtx.currentTime);
+          osc.frequency.exponentialRampToValueAtTime(110, audioCtx.currentTime + 0.15);
+          gain.gain.setValueAtTime(0.2, audioCtx.currentTime);
+          gain.gain.linearRampToValueAtTime(0.01, audioCtx.currentTime + 0.15);
+          osc.connect(gain); gain.connect(audioCtx.destination);
+          osc.start(); osc.stop(audioCtx.currentTime + 0.15);
+        } catch(e) {}
+      },
+      playItem() {
+        if (!soundEnabled || !audioCtx) return;
+        try {
+          const now = audioCtx.currentTime;
+          const osc = audioCtx.createOscillator();
+          const gain = audioCtx.createGain();
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(523.25, now);
+          osc.frequency.setValueAtTime(659.25, now + 0.08);
+          osc.frequency.setValueAtTime(783.99, now + 0.16);
+          osc.frequency.setValueAtTime(1046.50, now + 0.24);
+          gain.gain.setValueAtTime(0.2, now);
+          gain.gain.linearRampToValueAtTime(0.01, now + 0.4);
+          osc.connect(gain); gain.connect(audioCtx.destination);
+          osc.start(); osc.stop(now + 0.4);
+        } catch(e) {}
+      },
+      playDamage() {
+        if (!soundEnabled || !audioCtx) return;
+        try {
+          const osc = audioCtx.createOscillator();
+          const gain = audioCtx.createGain();
+          osc.type = 'sawtooth';
+          osc.frequency.setValueAtTime(120, audioCtx.currentTime);
+          osc.frequency.linearRampToValueAtTime(40, audioCtx.currentTime + 0.3);
+          gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
+          gain.gain.linearRampToValueAtTime(0.01, audioCtx.currentTime + 0.3);
+          osc.connect(gain); gain.connect(audioCtx.destination);
+          osc.start(); osc.stop(audioCtx.currentTime + 0.3);
+        } catch(e) {}
+      }
+    };
+
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+
+    let gameState = 'START';
+    let difficulty = 'easy';
+    let score = 0;
+    let combo = 1;
+    let wave = 1;
+    let lives = 3;
+    let bonusLives = 0;
+    let defeatedCount = 0;
+    let bossesDefeatedCount = 0;
+
+    let invaders = [];
+    let particles = [];
+
+    let lastSpawnTime = 0;
+    let spawnInterval = 4000;
+    let defenseY = 0;
+    let slowTimer = 0;
+
+    const difficultySettings = {
+      easy: { name: "初級", speedMult: 0.7, interval: 4500, label: "初級: 常用汉字与基础训读词汇。显示假名提示，敌人速度较慢。" },
+      normal: { name: "中級", speedMult: 1.0, interval: 3500, label: "中級: 包含进阶训读与复合词。显示假名提示，速度适中。" },
+      hard: { name: "上級", speedMult: 1.4, interval: 2600, label: "上級: 高难熟语与冷门训读。无假名提示，考验硬核汉字实力。" }
+    };
+
+    function setDifficulty(diff) {
+      difficulty = diff;
+      document.getElementById('btnEasy').className = diff === 'easy' ? "py-2 px-1 text-xs rounded-xl bg-teal-600 text-white font-bold transition border border-teal-400 shadow-lg" : "py-2 px-1 text-xs rounded-xl bg-stone-800 text-stone-300 font-bold transition hover:bg-stone-700 border border-stone-700";
+      document.getElementById('btnNormal').className = diff === 'normal' ? "py-2 px-1 text-xs rounded-xl bg-teal-600 text-white font-bold transition border border-teal-400 shadow-lg" : "py-2 px-1 text-xs rounded-xl bg-stone-800 text-stone-300 font-bold transition hover:bg-stone-700 border border-stone-700";
+      document.getElementById('btnHard').className = diff === 'hard' ? "py-2 px-1 text-xs rounded-xl bg-teal-600 text-white font-bold transition border border-teal-400 shadow-lg" : "py-2 px-1 text-xs rounded-xl bg-stone-800 text-stone-300 font-bold transition hover:bg-stone-700 border border-stone-700";
+      document.getElementById('diffDesc').textContent = difficultySettings[diff].label;
+      document.getElementById('diffBadgeText').textContent = difficultySettings[diff].name;
+    }
+
+    function resizeCanvas() {
+      const container = canvas.parentElement;
+      canvas.width = container.clientWidth || 360;
+      const keypadHidden = document.getElementById('kanaKeypad')?.classList.contains('hidden');
+      const maxH = keypadHidden ? window.innerHeight - 210 : window.innerHeight - 360;
+      canvas.height = Math.max(260, Math.min(440, maxH));
+      defenseY = canvas.height - 16;
+    }
+
+    // BUILT-IN QWERTY ROMAJI TO HIRAGANA ENGINE
+    const romajiMap = {
+      'a':'あ','i':'い','u':'う','e':'え','o':'お',
+      'ka':'か','ki':'き','ku':'く','ke':'け','ko':'こ',
+      'sa':'さ','shi':'し','si':'し','su':'す','se':'せ','so':'そ',
+      'ta':'た','chi':'ち','ti':'ち','tsu':'つ','tu':'つ','te':'て','to':'と',
+      'na':'な','ni':'に','nu':'ぬ','ne':'ね','no':'の',
+      'ha':'は','hi':'ひ','fu':'ふ','hu':'ふ','he':'へ','ho':'ほ',
+      'ma':'ま','mi':'み','mu':'む','me':'め','mo':'も',
+      'ya':'や','yi':'い','yu':'ゆ','yo':'よ',
+      'ra':'ら','ri':'り','ru':'る','re':'れ','ro':'ろ',
+      'wa':'わ','wu':'う','wo':'を','nn':'ん',"n'":'ん',
+      'ga':'が','gi':'ぎ','gu':'ぐ','ge':'げ','go':'ご',
+      'za':'ざ','ji':'じ','zi':'じ','zu':'ず','ze':'ぜ','zo':'ぞ',
+      'da':'だ','di':'ぢ','du':'づ','de':'で','do':'ど',
+      'ba':'ば','bi':'び','bu':'ぶ','be':'べ','bo':'ぼ',
+      'pa':'ぱ','pi':'ぴ','pu':'ぷ','pe':'ぺ','po':'ぽ',
+      'kya':'きゃ','kyu':'きゅ','kyo':'きょ',
+      'sha':'しゃ','shu':'しゅ','sho':'しょ','sya':'しゃ','syu':'しゅ','syo':'しょ',
+      'cha':'ちゃ','chu':'ちゅ','cho':'ちょ','tya':'ちゃ','tyu':'ちゅ','tyo':'ちょ',
+      'nya':'にゃ','nyu':'にゅ','nyo':'にょ',
+      'hya':'ひゃ','hyu':'ひゅ','hyo':'ひょ',
+      'mya':'みゃ','myu':'みゅ','myo':'みょ',
+      'rya':'りゃ','ryu':'りゅ','ryo':'りょ',
+      'gya':'ぎゃ','gyu':'ぎゅ','gyo':'ぎょ',
+      'ja':'じゃ','ju':'じゅ','jo':'じょ','jya':'じゃ','jyu':'じゅ','jyo':'じょ','zya':'じゃ','zyu':'じゅ','zyo':'じょ',
+      'bya':'びゃ','byu':'びゅ','byo':'びょ',
+      'pya':'ぴゃ','pyu':'ぴゅ','pyo':'ぴょ',
+      'xa':'ぁ','xi':'ぃ','xu':'ぅ','xe':'ぇ','xo':'ぉ',
+      'la':'ぁ','li':'ぃ','lu':'ぅ','le':'ぇ','lo':'ぉ',
+      'xya':'ゃ','xyu':'ゅ','xyo':'ょ','lya':'ゃ','lyu':'ゅ','lyo':'ょ',
+      'xtu':'っ','xtsu':'っ','ltu':'っ','ltsu':'っ','-':'ー'
+    };
+
+    function convertRomajiToHiragana(raw) {
+      let res = '';
+      let i = 0;
+      const s = raw.toLowerCase();
+      while (i < s.length) {
+        if (i + 1 < s.length && s[i] === s[i + 1] && 'bcdfghjklmpqrstvwxyz'.includes(s[i])) {
+          res += 'っ';
+          i++;
+          continue;
+        }
+        if (s[i] === 'n') {
+          if (i + 1 < s.length) {
+            const next = s[i + 1];
+            if (!'aiueoyn'.includes(next)) {
+              res += 'ん';
+              i++;
+              continue;
+            }
+          }
+        }
+        let matched = false;
+        for (let len = 4; len >= 1; len--) {
+          if (i + len <= s.length) {
+            const sub = s.slice(i, i + len);
+            if (romajiMap[sub]) {
+              res += romajiMap[sub];
+              i += len;
+              matched = true;
+              break;
+            }
+          }
+        }
+        if (!matched) {
+          res += s[i];
+          i++;
+        }
+      }
+      return res;
+    }
+
+    function tapRomaji(ch) {
+      if (gameState !== 'PLAYING') return;
+      const inputEl = document.getElementById('kanjiInput');
+      inputEl.value = convertRomajiToHiragana(inputEl.value + ch);
+      checkAutoMatch();
+    }
+
+    function backspaceKana() {
+      const inputEl = document.getElementById('kanjiInput');
+      inputEl.value = inputEl.value.slice(0, -1);
+    }
+
+    function clearKana() {
+      document.getElementById('kanjiInput').value = '';
+    }
+
+    function checkAutoMatch() {
+      if (gameState !== 'PLAYING') return;
+      const val = document.getElementById('kanjiInput').value.trim();
+      if (!val) return;
+      const exactHit = invaders.some(inv => !inv.defeated && (inv.word === val || inv.readings.includes(val)));
+      if (exactHit) {
+        submitInput();
+      }
+    }
+
+    function toggleKeyboard() {
+      const keypad = document.getElementById('kanaKeypad');
+      const inputEl = document.getElementById('kanjiInput');
+      const isHidden = keypad.classList.toggle('hidden');
+      if (isHidden) {
+        inputEl.removeAttribute('readonly');
+        inputEl.setAttribute('inputmode', 'text');
+        inputEl.placeholder = '漢字・よみ (例: あめ)...';
+        inputEl.focus();
+      } else {
+        inputEl.setAttribute('readonly', 'true');
+        inputEl.setAttribute('inputmode', 'none');
+        inputEl.placeholder = 'ローマ字で入力 (例: akinau)...';
+        inputEl.blur();
+      }
+      resizeCanvas();
+    }
+
+    // 电脑端物理键盘直接输入支持（不影响手机端虚拟键盘体验）
+    document.addEventListener('keydown', (e) => {
+      if (gameState !== 'PLAYING') return;
+      const keypadHidden = document.getElementById('kanaKeypad').classList.contains('hidden');
+      if (keypadHidden) return; // 切换至系统输入法模式时由原生输入框处理
+
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
+
+      if (e.key === 'Backspace') {
+        e.preventDefault();
+        backspaceKana();
+      } else if (e.key === 'Escape') {
+        e.preventDefault();
+        clearKana();
+      } else if (e.key === 'Enter') {
+        e.preventDefault();
+        submitInput();
+      } else if (/^[a-zA-Z\-']$/.test(e.key)) {
+        e.preventDefault();
+        tapRomaji(e.key.toLowerCase());
+      }
+    });
+
+    // 支持电脑端直接输入日文汉字或假名（如通过系统IME输入）
+    document.getElementById('kanjiInput').addEventListener('input', (e) => {
+      if (gameState !== 'PLAYING') return;
+      const inputEl = e.target;
+      inputEl.value = convertRomajiToHiragana(inputEl.value);
+      checkAutoMatch();
+    });
+
+    window.addEventListener('resize', resizeCanvas);
+    resizeCanvas();
+
+    class Invader {
+      constructor(isBoss = false, bossObj = null, isSpecialKun = false) {
+        this.isBoss = isBoss;
+        this.isSpecialKun = isSpecialKun;
+
+        if (isBoss && bossObj) {
+          this.word = bossObj.word;
+          this.readings = bossObj.readings;
+          this.hint = bossObj.hint;
+          this.maxHp = 3;
+          this.hp = 3;
+          this.radius = Math.max(80, Math.min(110, 32 + this.word.length * 16));
+        } else if (isSpecialKun) {
+          const item = kunyomiVerbPool[Math.floor(Math.random() * kunyomiVerbPool.length)];
+          this.word = item.word;
+          this.readings = item.readings;
+          this.hint = item.hint;
+          this.hp = 1;
+          this.maxHp = 1;
+          this.radius = 64;
+        } else {
+          const pool = vocabData[difficulty] || vocabData.easy;
+          const item = pool[Math.floor(Math.random() * pool.length)];
+          this.word = item.word;
+          this.readings = item.readings;
+          this.hint = item.hint;
+          this.hp = 1;
+          this.maxHp = 1;
+          this.radius = Math.max(52, Math.min(76, 28 + this.word.length * 12));
+        }
+
+        this.x = Math.random() * (canvas.width - this.radius * 2) + this.radius;
+        this.y = -this.radius - 20;
+
+        const baseSpeed = ((0.5 + wave * 0.08) * difficultySettings[difficulty].speedMult) * 0.5;
+        this.speed = isBoss ? baseSpeed * 0.65 : baseSpeed;
+        this.vx = (Math.random() - 0.5) * 0.2;
+        this.defeated = false;
+      }
+
+      update() {
+        const slowFactor = slowTimer > 0 ? 0.4 : 1.0;
+        this.y += this.speed * slowFactor;
+        this.x += this.vx * slowFactor;
+        if (this.x < this.radius) { this.x = this.radius; this.vx *= -1; }
+        if (this.x > canvas.width - this.radius) { this.x = canvas.width - this.radius; this.vx *= -1; }
+      }
+
+      draw() {
+        ctx.save();
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+
+        if (this.isBoss) {
+          ctx.fillStyle = 'rgba(153, 27, 27, 0.85)';
+          ctx.strokeStyle = '#f87171';
+          ctx.lineWidth = 4;
+          ctx.shadowColor = '#ef4444';
+          ctx.shadowBlur = 15;
+        } else if (this.isSpecialKun) {
+          ctx.fillStyle = 'rgba(180, 83, 9, 0.85)';
+          ctx.strokeStyle = '#fbbf24';
+          ctx.lineWidth = 4;
+          ctx.shadowColor = '#f59e0b';
+          ctx.shadowBlur = 12;
+        } else {
+          ctx.fillStyle = 'rgba(13, 148, 136, 0.8)';
+          ctx.strokeStyle = '#2dd4bf';
+          ctx.lineWidth = 3;
+          ctx.shadowColor = '#14b8a6';
+          ctx.shadowBlur = 8;
+        }
+
+        ctx.fill();
+        ctx.stroke();
+
+        ctx.fillStyle = '#ffffff';
+        ctx.font = `${this.isBoss ? 'bold 30px' : 'bold 28px'} 'Noto Sans JP', sans-serif`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.shadowBlur = 4;
+        ctx.shadowColor = '#000000';
+        ctx.fillText(this.word, this.x, this.y - (this.isBoss ? 8 : 4));
+
+        if (difficulty !== 'hard' && this.hint) {
+          ctx.fillStyle = this.isSpecialKun ? '#fef3c7' : '#99f6e4';
+          ctx.font = '20px "Noto Sans JP", sans-serif';
+          ctx.fillText(this.hint, this.x, this.y + (this.isBoss ? 32 : 26));
+        }
+
+        if (this.isBoss) {
+          const barW = 108;
+          const barH = 10;
+          const bx = this.x - barW / 2;
+          const by = this.y - this.radius - 18;
+          ctx.fillStyle = 'rgba(0,0,0,0.7)';
+          ctx.fillRect(bx, by, barW, barH);
+          ctx.fillStyle = '#ef4444';
+          ctx.fillRect(bx, by, barW * (this.hp / this.maxHp), barH);
+          ctx.strokeStyle = '#fca5a5';
+          ctx.lineWidth = 1.5;
+          ctx.strokeRect(bx, by, barW, barH);
+        }
+
+        ctx.restore();
+      }
+    }
+
+    class Particle {
+      constructor(x, y, color) {
+        this.x = x; this.y = y;
+        this.color = color || '#2dd4bf';
+        const angle = Math.random() * Math.PI * 2;
+        const speed = Math.random() * 4 + 1;
+        this.vx = Math.cos(angle) * speed;
+        this.vy = Math.sin(angle) * speed;
+        this.alpha = 1.0;
+        this.decay = Math.random() * 0.03 + 0.02;
+      }
+      update() {
+        this.x += this.vx; this.y += this.vy;
+        this.alpha -= this.decay;
+      }
+      draw() {
+        ctx.save();
+        ctx.globalAlpha = Math.max(0, this.alpha);
+        ctx.fillStyle = this.color;
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, 3, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      }
+    }
+
+    function addFloatingText(text, x, y, color = '#2dd4bf') {
+      const div = document.createElement('div');
+      div.className = 'absolute font-bold text-xs sm:text-sm pointer-events-none floating-anim pixel-font';
+      div.style.left = `${x}px`;
+      div.style.top = `${y}px`;
+      div.style.color = color;
+      div.textContent = text;
+      canvas.parentElement.appendChild(div);
+      setTimeout(() => div.remove(), 1500);
+    }
+
+    function showItemNotification(name, iconClass = 'fa-wand-magic-sparkles') {
+      const notif = document.getElementById('itemNotification');
+      const textEl = document.getElementById('itemNotifyText');
+      textEl.innerHTML = `<i class="fa-solid ${iconClass} text-yellow-400 text-base mr-1"></i> ${name}`;
+      notif.classList.remove('opacity-0', '-translate-y-4');
+      notif.classList.add('opacity-100', 'translate-y-0');
+      setTimeout(() => {
+        notif.classList.remove('opacity-100', 'translate-y-0');
+        notif.classList.add('opacity-0', '-translate-y-4');
+      }, 1500);
+    }
+
+    function startGame() {
+      initAudio();
+      document.getElementById('startScreen').classList.add('hidden');
+      document.getElementById('gameOverScreen').classList.add('hidden');
+      gameState = 'PLAYING';
+      score = 0;
+      combo = 1;
+      wave = 1;
+      lives = 3;
+      bonusLives = 0;
+      defeatedCount = 0;
+      bossesDefeatedCount = 0;
+      invaders = [];
+      particles = [];
+      slowTimer = 0;
+      spawnInterval = difficultySettings[difficulty].interval;
+      
+      lastSpawnTime = performance.now();
+      spawnInvader();
+      
+      updateHUD();
+      document.getElementById('kanjiInput').focus();
+      requestAnimationFrame(gameLoop);
+    }
+
+    function restartGame() {
+      startGame();
+    }
+
+    function returnToMenu() {
+      gameState = 'START';
+      document.getElementById('startScreen').classList.remove('hidden');
+      document.getElementById('gameOverScreen').classList.add('hidden');
+    }
+
+    function togglePause() {
+      if (gameState === 'PLAYING') {
+        gameState = 'PAUSED';
+        document.getElementById('pauseBtn').innerHTML = '<i class="fa-solid fa-play"></i>';
+      } else if (gameState === 'PAUSED') {
+        gameState = 'PLAYING';
+        document.getElementById('pauseBtn').innerHTML = '<i class="fa-solid fa-pause"></i>';
+        requestAnimationFrame(gameLoop);
+      }
+    }
+
+    function toggleAudio() {
+      soundEnabled = !soundEnabled;
+      document.getElementById('audioBtn').innerHTML = soundEnabled ? '<i class="fa-solid fa-volume-high"></i>' : '<i class="fa-solid fa-volume-xmark text-stone-500"></i>';
+    }
+
+    function gameOver() {
+      gameState = 'GAMEOVER';
+      sound.playDamage();
+      document.getElementById('finalScore').textContent = score;
+      document.getElementById('finalWave').textContent = wave;
+      document.getElementById('finalDefeated').textContent = defeatedCount;
+      document.getElementById('gameOverScreen').classList.remove('hidden');
+    }
+
+    function spawnInvader() {
+      if (gameState !== 'PLAYING') return;
+
+      if (wave >= 2 && invaders.filter(i => i.isBoss).length === 0 && Math.random() < 0.4) {
+        let count = 1;
+        if (wave === 2) {
+          count = 1;
+        } else if (wave === 3 || wave === 4) {
+          count = 2;
+        } else if (wave === 5 || wave === 6) {
+          count = 3;
+        } else if (wave === 7 || wave === 8) {
+          count = 4;
+        } else {
+          count = 5; // Max limit: 5 simultaneous bosses
+        }
+
+        for (let i = 0; i < count; i++) {
+          const bossTemplate = bossPool[Math.floor(Math.random() * bossPool.length)];
+          const boss = new Invader(true, bossTemplate, false);
+          boss.x = (canvas.width / (count + 1)) * (i + 1) + (Math.random() - 0.5) * 20;
+          invaders.push(boss);
+        }
+        addFloatingText(`⚠️ BOSS 複数出現 (${count}体)! (Wave ${wave})`, canvas.width / 2 - 70, 60, '#ef4444');
+      } else {
+        const isSpecial = Math.random() < 0.30;
+        invaders.push(new Invader(false, null, isSpecial));
+      }
+    }
+
+    function submitInput() {
+      if (gameState !== 'PLAYING') return;
+      const inputEl = document.getElementById('kanjiInput');
+      const val = inputEl.value.trim().toLowerCase();
+      if (!val) return;
+
+      let matched = false;
+      for (let i = 0; i < invaders.length; i++) {
+        const inv = invaders[i];
+        const hitMatch = inv.word === val || inv.readings.some(r => r === val);
+
+        if (hitMatch) {
+          matched = true;
+          inv.hp--;
+          sound.playHit();
+
+          if (inv.hp <= 0) {
+            inv.defeated = true;
+            defeatedCount++;
+
+            for (let p = 0; p < 18; p++) {
+              particles.push(new Particle(inv.x, inv.y, inv.isBoss ? '#ef4444' : '#2dd4bf'));
+            }
+
+            if (inv.isBoss) {
+              bossesDefeatedCount++;
+              score += 500 * combo;
+              addFloatingText(`+${500 * combo} BOSS撃破!`, inv.x - 30, inv.y, '#f87171');
+
+              if (bossesDefeatedCount % 2 === 0) {
+                bonusLives++;
+                showItemNotification("ボス撃破ボーナス: シールド＋1！", "fa-shield-heart");
+                sound.playItem();
+                triggerLifePulse();
+              }
+            } else if (inv.isSpecialKun) {
+              score += 250 * combo;
+              combo++;
+              addFloatingText(`+${250 * (combo - 1)} 訓読特殊兵撃破!`, inv.x - 35, inv.y, '#fbbf24');
+
+              const itemType = Math.floor(Math.random() * 4);
+              if (itemType === 0) {
+                bonusLives++;
+                showItemNotification("【護衛】シールド回復 (+1)", "fa-shield-heart");
+                sound.playItem();
+                triggerLifePulse();
+              } else if (itemType === 1) {
+                slowTimer = 350;
+                showItemNotification("【時間】スロー効果発動", "fa-hourglass-half");
+                sound.playItem();
+              } else if (itemType === 2) {
+                const others = invaders.filter(other => !other.defeated && other !== inv);
+                others.sort((a, b) => Math.hypot(a.x - inv.x, a.y - inv.y) - Math.hypot(b.x - inv.x, b.y - inv.y));
+                const targetsToHit = others.slice(0, 3);
+                targetsToHit.forEach(t => {
+                  t.hp--;
+                  if (t.hp <= 0) t.defeated = true;
+                  for (let p = 0; p < 8; p++) particles.push(new Particle(t.x, t.y, '#f59e0b'));
+                });
+                showItemNotification("【拡散】散射效果激活 (周辺3体撃破)", "fa-burst");
+                sound.playItem();
+              } else {
+                if (invaders.length > 0) {
+                  const lowest = invaders.reduce((prev, curr) => (curr.y > prev.y) ? curr : prev);
+                  lowest.defeated = true;
+                  for (let p = 0; p < 12; p++) particles.push(new Particle(lowest.x, lowest.y, '#eab308'));
+                }
+                showItemNotification("【一撃】ワンキル発動", "fa-bolt");
+                sound.playItem();
+              }
+            } else {
+              score += 100 * combo;
+              combo++;
+              addFloatingText(`+${100 * (combo - 1)}`, inv.x - 20, inv.y, '#2dd4bf');
+            }
+          } else {
+            for (let p = 0; p < 6; p++) particles.push(new Particle(inv.x, inv.y, '#fca5a5'));
+            addFloatingText("HIT!", inv.x - 15, inv.y, '#fca5a5');
+          }
+          break;
+        }
+      }
+
+      if (!matched) {
+        combo = 1;
+        sound.playShoot();
+        addFloatingText("MISS", canvas.width / 2 - 15, canvas.height - 70, '#f43f5e');
+      }
+
+      inputEl.value = '';
+      updateHUD();
+    }
+
+    function triggerLifePulse() {
+      const container = document.getElementById('livesContainer');
+      container.classList.add('pulse-anim');
+      setTimeout(() => container.classList.remove('pulse-anim'), 500);
+    }
+
+    document.getElementById('kanjiInput').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        submitInput();
+      }
+    });
+
+    function updateHUD() {
+      document.getElementById('scoreText').textContent = String(score).padStart(5, '0');
+      document.getElementById('comboText').textContent = `x${Math.max(1, combo)}`;
+      document.getElementById('waveText').textContent = String(wave).padStart(2, '0');
+
+      let hearts = '';
+      for (let i = 0; i < 3; i++) {
+        hearts += (i < lives) ? '<i class="fa-solid fa-shield-heart"></i> ' : '<i class="fa-regular fa-shield text-stone-600"></i> ';
+      }
+      
+      if (bonusLives > 0) {
+        hearts += '<span class="flex items-center gap-1 ml-1 pl-1 border-l border-stone-700 inline-flex">';
+        for (let j = 0; j < bonusLives; j++) {
+          hearts += '<span class="w-2.5 h-2.5 rounded-full bg-rose-500 inline-block shadow-[0_0_6px_#f43f5e]"></span>';
+        }
+        hearts += '</span>';
+      }
+      document.getElementById('livesContainer').innerHTML = hearts;
+
+      const listEl = document.getElementById('lockOnList');
+      if (invaders.length > 0) {
+        const names = invaders.slice(0, 4).map(i => i.word).join(' ');
+        listEl.textContent = names + (invaders.length > 4 ? ' ...' : '');
+      } else {
+        listEl.textContent = 'なし';
+      }
+    }
+
+    let lastTime = 0;
+    function gameLoop(timestamp) {
+      if (gameState !== 'PLAYING') return;
+
+      if (!lastTime) lastTime = timestamp;
+      const delta = timestamp - lastTime;
+      lastTime = timestamp;
+
+      ctx.fillStyle = '#09090b';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      ctx.strokeStyle = 'rgba(20, 184, 166, 0.08)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      for (let x = 0; x < canvas.width; x += 40) {
+        ctx.moveTo(x, 0); ctx.lineTo(x, canvas.height);
+      }
+      for (let y = 0; y < canvas.height; y += 40) {
+        ctx.moveTo(0, y); ctx.lineTo(canvas.width, y);
+      }
+      ctx.stroke();
+
+      ctx.strokeStyle = '#f43f5e';
+      ctx.lineWidth = 2;
+      ctx.setLineDash([6, 6]);
+      ctx.beginPath();
+      ctx.moveTo(0, defenseY);
+      ctx.lineTo(canvas.width, defenseY);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      if (!lastSpawnTime || timestamp - lastSpawnTime > spawnInterval) {
+        spawnInvader();
+        lastSpawnTime = timestamp;
+        if (defeatedCount > 0 && defeatedCount % 8 === 0) {
+          wave++;
+          spawnInterval = Math.max(1800, spawnInterval - 200);
+          addFloatingText(`🚀 WAVE ${wave} 到達！`, canvas.width / 2 - 50, 40, '#2dd4bf');
+        }
+      }
+
+      if (slowTimer > 0) slowTimer--;
+
+      for (let i = invaders.length - 1; i >= 0; i--) {
+        const inv = invaders[i];
+        inv.update();
+        inv.draw();
+
+        if (inv.y >= defenseY && !inv.defeated) {
+          inv.defeated = true;
+          sound.playDamage();
+          combo = 1;
+
+          if (bonusLives > 0) {
+            bonusLives--;
+          } else {
+            lives--;
+          }
+
+          updateHUD();
+          triggerLifePulse();
+          if (lives <= 0 && bonusLives <= 0) {
+            gameOver();
+            return;
+          }
+        }
+
+        if (inv.defeated || inv.y > canvas.height + 40) {
+          invaders.splice(i, 1);
+        }
+      }
+
+      for (let i = particles.length - 1; i >= 0; i--) {
+        const p = particles[i];
+        p.update();
+        p.draw();
+        if (p.alpha <= 0) particles.splice(i, 1);
+      }
+
+      requestAnimationFrame(gameLoop);
+    }
+
+    window.onload = function() {
+      resizeCanvas();
+      updateHUD();
+    };
+  </script>
+</body>
+</html>
